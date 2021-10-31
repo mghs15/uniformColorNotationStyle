@@ -4,7 +4,7 @@ const json = require("./style.json");
 
 const layers = json.layers;
 
-
+//rgbをhslへ変換
 const calcsl = function(max, min) {
     let L = (max + min)/(2*255);
     let total = max + min;
@@ -74,6 +74,42 @@ const rgb2hsl = function(r, g, b, a = 1) {
     return hsl;
 }
 
+//hslをrgbへ変換
+const hsl2rgb = (h, ss, ll, a=1) => {
+    const s = ss/100;
+    const l = ll/100;
+    const max = l + (s * (1 - Math.abs((2 * l) - 1)) / 2);
+    const min = l - (s * (1 - Math.abs((2 * l) - 1)) / 2);
+
+    let rgb;
+    const i = parseInt(h / 60);
+
+    switch (i) {
+      case 0:
+      case 6:
+        rgb = [max, min + (max - min) * (h / 60), min];
+        break;
+      case 1:
+        rgb = [min + (max - min) * ((120 - h) / 60), max, min];
+        break;
+      case 2:
+        rgb = [min, max, min + (max - min) * ((h - 120) / 60)];
+        break;
+      case 3:
+        rgb = [min, min + (max - min) * ((240 - h) / 60), max];
+        break;
+      case 4:
+        rgb = [min + (max - min) * ((h - 240) / 60), min, max];
+        break;
+      case 5:
+        rgb = [max, min, min + (max - min) * ((360 - h) / 60)];
+        break;
+    }
+    
+    const res = [Math.floor(rgb[0]*255), Math.floor(rgb[1]*255), Math.floor(rgb[2]*255), a];
+    return rgb;
+}
+
 
 //"rgba(r,g,b,a)"などのパース
 const parseColorText = function(txt){
@@ -98,7 +134,7 @@ const parseColorText = function(txt){
     const col = txt.split(",");
     col.push(1);
     
-    color.push( type );
+    color.push( type + "a" );
     color.push( parseInt(col[0]) );
     color.push( parseInt(col[1]) );
     color.push( parseInt(col[2]) );
@@ -108,23 +144,33 @@ const parseColorText = function(txt){
   return color;
 }
 
-const convertColorNoteStyle = (c) => {
+
+//配列形式の色記述を["hsl", s, s, l]形式へ統一。ついでに透過度も返す。
+//実は、Mapboxでは、["hsl", s, s, l]形式をサポートしていないので、ＲＧＢへ戻す。
+const separateArrayColor = (c) => {
+  const res = {
+    "color": ["test", 1, 1, 1],
+    "opacity": ""
+  };
   
-  const buf = {};
+  if(Array.isArray(c)){
+    if(c[0] == "case"){
+      res.color = convertColorNoteStyleInCase(c);
+    }else if(c[0] == "rgba"){
+      res.color = ["rgb", c[1], c[2], c[3]];
+      res.opacity = c[4];
+    }else{
+      res.color = c;
+    }
   
-  //まず、文字列を配列形式に直す。
-  if(!Array.isArray(c)){
-    buf.color = parseColorText(c);
-  }else{
-    buf.color = c;
   }
   
-  //次に配列の内容に応じて処理。
-  const res = separateArrayColor(buf.color);
-  
-  return res; 
+
+  return res;
+
 }
 
+//["case", ...]形式の記述に含まれるcolorのスタイル記述を変換。（透過度は無視）
 const convertColorNoteStyleInCase = (c) => {
   
   const res = [];
@@ -148,60 +194,57 @@ const convertColorNoteStyleInCase = (c) => {
   return res; 
 }
 
-
-const separateArrayColor = (c) => {
-  const res = {
-    "color": ["test", 1, 1, 1],
-    "opacity": ""
-  };
+//colorのスタイル記述を["hsl", s, s, l]形式へ統一。ついでに透過度も返す。
+const convertColorNoteStyle = (c) => {
   
-  if(Array.isArray(c)){
-    if(c[0] == "case"){
-      res.color = convertColorNoteStyleInCase(c);
-    }else if(c[0] == "rgba"){
-      const hsl = rgb2hsl(c[1], c[2], c[3]);
-      res.color = ["hsl", hsl[0], hsl[1], hsl[2]];
-      res.opacity = c[4];
-    }else if(c[0] == "hsla"){
-      res.color = ["hsl", c[1], c[2], c[3]];
-      res.opacity = c[4];
-    }else if(c[0] == "rgb"){
-      const hsl = rgb2hsl(c[1], c[2], c[3], 1);
-      res.color = ["hsl", hsl[0], hsl[1], hsl[2]];
-    }else{
-      res.color = c;
-    }
+  const buf = {};
   
+  //まず、文字列を配列形式に直す。
+  if(!Array.isArray(c)){
+    buf.color = parseColorText(c);
+  }else{
+    buf.color = c;
   }
   
-  return res;
-
+  //次に配列の内容に応じて処理。
+  const res = separateArrayColor(buf.color);
+  
+  return res; 
 }
 
-
+//（実行）レイヤごとに、convertColorNoteStyle()を適用。
+const newlayers = [];
 layers.forEach( l => {
   
   const type = l.type;
   const paint = l.paint;
   for(name in paint){
     if(name.match(/-color/)){
-      console.log(paint[name]);
-      console.log("↓");
+      //console.log(paint[name]);
+      //console.log("↓");
       
       const res = convertColorNoteStyle(paint[name]);
       paint[name] = res.color;
       
+      
+  if(paint[name].length > 4) console.log(res);
+      
       const opacityKeyName = type + "-opacity";
-      if(res.opacity && !paint[opacityKeyName]){
+      if(res.opacity && !paint[opacityKeyName] && type != "symbol"){
         paint[opacityKeyName] = res.opacity;
       }
       
-      console.log(paint[name]);
-      console.log("\n");
+      //console.log(paint[name]);
+      //console.log("\n");
     }
   
   }
   
+  newlayers.push(l);
+  
 });
 
+json.layers = newlayers;
+
+fs.writeFileSync("_new.json", JSON.stringify(json, null, 2));
 
