@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const json = require("./style.json");
+const json = require("./input.json");
 
 const layers = json.layers;
 
@@ -146,8 +146,7 @@ const parseColorText = function(txt){
 }
 
 
-//配列形式の色記述を["hsl", s, s, l]形式へ統一。ついでに透過度も返す。
-//実は、Mapboxでは、["hsl", s, s, l]形式をサポートしていないので、ＲＧＢへ戻す。
+//配列形式の色記述を透過度なしの["rgb", r, g, b]形式へ統一。ついでに透過度も別途返す。
 const separateArrayColor = (c) => {
   const res = {
     "color": ["test", 1, 1, 1],
@@ -239,8 +238,10 @@ layers.forEach( l => {
       //何か、加工するならここで
       
       const opacityKeyName = type + "-opacity";
-      if(res.opacity && !paint[opacityKeyName] && type != "symbol"){
-        paint[opacityKeyName] = res.opacity;
+      if(res.opacity && type != "symbol"){
+        if(!Object.keys(paint).includes(opacityKeyName)){ //opacity=0のときに代入されてしまうのを防ぐ
+          paint[opacityKeyName] = res.opacity;
+        }
       }
       
       //console.log(paint[name]);
@@ -255,5 +256,5 @@ layers.forEach( l => {
 
 json.layers = newlayers;
 
-fs.writeFileSync("_new.json", JSON.stringify(json, null, 2));
+fs.writeFileSync("base.json", JSON.stringify(json, null, 2));
 
