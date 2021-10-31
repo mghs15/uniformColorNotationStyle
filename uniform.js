@@ -107,7 +107,7 @@ const hsl2rgb = (h, ss, ll, a=1) => {
     }
     
     const res = [Math.floor(rgb[0]*255), Math.floor(rgb[1]*255), Math.floor(rgb[2]*255), a];
-    return rgb;
+    return res;
 }
 
 
@@ -140,6 +140,7 @@ const parseColorText = function(txt){
     color.push( parseInt(col[2]) );
     color.push( Number(col[3]) );    
   }
+  
   
   return color;
 }
@@ -202,6 +203,15 @@ const convertColorNoteStyle = (c) => {
   //まず、文字列を配列形式に直す。
   if(!Array.isArray(c)){
     buf.color = parseColorText(c);
+    
+    //ここでhslをrgbへ変換して、以降はRGBで取り扱う
+    if(buf.color[0] == "hsla"){
+      const rgb = hsl2rgb(buf.color[1], buf.color[2], buf.color[3], buf.color[4])
+      buf.color = ["rgba", ...rgb];
+      //console.log(rgb);
+    }
+    
+    
   }else{
     buf.color = c;
   }
@@ -226,8 +236,7 @@ layers.forEach( l => {
       const res = convertColorNoteStyle(paint[name]);
       paint[name] = res.color;
       
-      
-  if(paint[name].length > 4) console.log(res);
+      //何か、加工するならここで
       
       const opacityKeyName = type + "-opacity";
       if(res.opacity && !paint[opacityKeyName] && type != "symbol"){
